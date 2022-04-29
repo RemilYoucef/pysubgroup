@@ -34,7 +34,7 @@ class BinaryTarget:
         self.target_selector = target_selector
 
     def __repr__(self):
-        return "T: " + str(self.target_selector)
+        return f"T: {str(self.target_selector)}"
 
     def __eq__(self, other):
         return self.__dict__ == other.__dict__
@@ -59,7 +59,7 @@ class BinaryTarget:
 
     def calculate_statistics(self, subgroup, data, cached_statistics=None):
         if cached_statistics is None or not isinstance(cached_statistics, dict):
-            statistics = dict()
+            statistics = {}
         elif all(k in cached_statistics for k in BinaryTarget.statistic_types):
             return cached_statistics
         else:
@@ -157,9 +157,12 @@ class ChiSquaredQF(SimplePositivesQF):
             return val
         p_subgroup = positives_subgroup / instances_subgroup
         p_dataset = positives_dataset / instances_dataset
-        if direction_positive and p_subgroup > p_dataset:
-            return val
-        elif not direction_positive and p_subgroup < p_dataset:
+        if (
+            direction_positive
+            and p_subgroup > p_dataset
+            or not direction_positive
+            and p_subgroup < p_dataset
+        ):
             return val
         return -val
 

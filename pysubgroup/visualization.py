@@ -148,6 +148,9 @@ def supportSetVisualization(result, in_order=True, drop_empty=True):
         img_arr = img_arr[:, sort_inds_y]
     if drop_empty:
         keep_entities = np.sum(img_arr, axis=1) > 0
-        print("Discarding {} entities that are not covered".format(n_items - np.count_nonzero(keep_entities)))
+        print(
+            f"Discarding {n_items - np.count_nonzero(keep_entities)} entities that are not covered"
+        )
+
         img_arr = img_arr[keep_entities, :]
     return img_arr.T
