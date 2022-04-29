@@ -110,8 +110,7 @@ class TestAlgorithms(BooleanTargetBase, unittest.TestCase):
 if __name__ == '__main__':
 
     #unittest.main()
-    suites = []
-    suites.append(unittest.TestLoader().loadTestsFromTestCase(TestAlgorithms))
+    suites = [unittest.TestLoader().loadTestsFromTestCase(TestAlgorithms)]
     #suites.append(unittest.TestLoader().loadTestsFromTestCase(TestAlgorithms2))
     #suites.append( unittest.TestLoader().loadTestsFromTestCase(TestAlgorithms3))
     complete_suite = unittest.TestSuite(suites)

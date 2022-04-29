@@ -67,20 +67,24 @@ class Apriori:
             ps.add_if_required(result, sg, task.qf.evaluate(sg, statistics, task.target, task.data), task, statistics=statistics)
             optimistic_estimate = optimistic_estimate_function(sg, task.target, task.data, statistics)
 
-            if optimistic_estimate >= ps.minimum_required_quality(result, task):
-                if ps.constraints_hold(task.constraints_monotone, sg, statistics, task.data):
-                    promising_candidates.append((optimistic_estimate, sg.selectors))
+            if optimistic_estimate >= ps.minimum_required_quality(
+                result, task
+            ) and ps.constraints_hold(
+                task.constraints_monotone, sg, statistics, task.data
+            ):
+                promising_candidates.append((optimistic_estimate, sg.selectors))
         min_quality = ps.minimum_required_quality(result, task)
         promising_candidates = [selectors for estimate, selectors in promising_candidates if estimate > min_quality]
         return promising_candidates
 
 
     def get_next_level_candidates_vectorized(self, task, result, next_level_candidates):
-        promising_candidates = []
-        statistics = []
         optimistic_estimate_function = getattr(task.qf, self.optimistic_estimate_name)
-        for sg in next_level_candidates:
-            statistics.append(task.qf.calculate_statistics(sg, task.target, task.data))
+        statistics = [
+            task.qf.calculate_statistics(sg, task.target, task.data)
+            for sg in next_level_candidates
+        ]
+
         tpl_class = statistics[0].__class__
         vec_statistics = tpl_class._make(np.array(tpl) for tpl in zip(*statistics))
         qualities = task.qf.evaluate(None, task.target, task.data, vec_statistics)
@@ -90,19 +94,34 @@ class Apriori:
             ps.add_if_required(result, sg, quality, task, statistics=stats)
 
         min_quality = ps.minimum_required_quality(result, task)
-        for sg, optimistic_estimate in zip(next_level_candidates, optimistic_estimates):
-            if optimistic_estimate >= min_quality:
-                promising_candidates.append(sg.selectors)
-        return promising_candidates
+        return [
+            sg.selectors
+            for sg, optimistic_estimate in zip(
+                next_level_candidates, optimistic_estimates
+            )
+            if optimistic_estimate >= min_quality
+        ]
 
     def reprune_lower_levels(self, promising_candidates, depth):
         for k in range(1, depth):
             promising_candidates_k = (combinations(selectors, k) for selectors in promising_candidates)
             combination_counter = Counter(chain.from_iterable(promising_candidates_k))
             d = depth + 1 - k
-            unpromising_combinations = set(frozenset(sel) for sel, count in combination_counter.items() if count < d)
-            promising_candidates = list(selectors for selectors in promising_candidates
-                                        if all(frozenset(comb) not in unpromising_combinations for comb in combinations(selectors, k)))
+            unpromising_combinations = {
+                frozenset(sel)
+                for sel, count in combination_counter.items()
+                if count < d
+            }
+
+            promising_candidates = [
+                selectors
+                for selectors in promising_candidates
+                if all(
+                    frozenset(comb) not in unpromising_combinations
+                    for comb in combinations(selectors, k)
+                )
+            ]
+
         return promising_candidates
 
     def get_next_level_numba(self, promising_candidates):
@@ -112,10 +131,12 @@ class Apriori:
             def getNewCandidates(l, hashes):
                 result = []
                 for i in range(len(l)-1):
-                    for j in range(i + 1, len(l)):
-                        if hashes[i] == hashes[j]:
-                            if np.all(l[i, :-1] == l[j, :-1]):
-                                result.append((i, j))
+                    result.extend(
+                        (i, j)
+                        for j in range(i + 1, len(l))
+                        if hashes[i] == hashes[j] and np.all(l[i, :-1] == l[j, :-1])
+                    )
+
                 return result
             self.compiled_func = getNewCandidates
 
@@ -130,9 +151,21 @@ class Apriori:
         return list((*promising_candidates[i], promising_candidates[j][-1])  for i, j in candidates_int)
 
     def get_next_level(self, promising_candidates):
-        precomputed_list = list((tuple(sg), sg[-1], hash(tuple(sg[:-1])), tuple(sg[:-1])) for sg in promising_candidates)
-        return list((*sg1, new_selector) for (sg1, _, hash_l, selectors_l), (_, new_selector, hash_r, selectors_r) in combinations(precomputed_list, 2)
-                    if (hash_l == hash_r) and (selectors_l == selectors_r))
+        precomputed_list = [
+            (tuple(sg), sg[-1], hash(tuple(sg[:-1])), tuple(sg[:-1]))
+            for sg in promising_candidates
+        ]
+
+        return [
+            (*sg1, new_selector)
+            for (sg1, _, hash_l, selectors_l), (
+                _,
+                new_selector,
+                hash_r,
+                selectors_r,
+            ) in combinations(precomputed_list, 2)
+            if (hash_l == hash_r) and (selectors_l == selectors_r)
+        ]
 
     def execute(self, task):
         if not isinstance(task.qf, ps.BoundedInterestingnessMeasure):
@@ -144,10 +177,7 @@ class Apriori:
             combine_selectors = getattr(representation.__class__, self.combination_name)
             result = []
             # init the first level
-            next_level_candidates = []
-            for sel in task.search_space:
-                next_level_candidates.append(combine_selectors([sel]))
-
+            next_level_candidates = [combine_selectors([sel]) for sel in task.search_space]
             # level-wise search
             depth = 1
             while next_level_candidates:
@@ -167,7 +197,7 @@ class Apriori:
 
                 # select those selectors and build a subgroup from them
                 #   for which all subsets of length depth (=candidate length -1) are in the set of promising candidates
-                set_promising_candidates = set(tuple(p) for p in promising_candidates)
+                set_promising_candidates = {tuple(p) for p in promising_candidates}
                 next_level_candidates = [combine_selectors(selectors) for selectors in next_level_candidates_no_pruning
                                          if all((subset in set_promising_candidates) for subset in combinations(selectors, depth))]
                 depth = depth + 1
@@ -195,9 +225,15 @@ class BestFirstSearch:
                     optimistic_estimate = task.qf.optimistic_estimate(sg, task.target, task.data, statistics)
 
                     # compute refinements and fill the queue
-                    if optimistic_estimate >= ps.minimum_required_quality(result, task):
-                        if ps.constraints_satisfied(task.constraints_monotone, candidate_description, statistics, task.data):
-                            heappush(queue, (-optimistic_estimate, candidate_description))
+                    if optimistic_estimate >= ps.minimum_required_quality(
+                        result, task
+                    ) and ps.constraints_satisfied(
+                        task.constraints_monotone,
+                        candidate_description,
+                        statistics,
+                        task.data,
+                    ):
+                        heappush(queue, (-optimistic_estimate, candidate_description))
 
         result.sort(key=lambda x: x[0], reverse=True)
         return ps.SubgroupDiscoveryResult(result, task)
@@ -210,14 +246,11 @@ class GeneralisingBFS:
         self.refined = [0, 0, 0, 0, 0, 0, 0]
 
     def execute(self, task):
-        result = []
-        queue = []
         operator = ps.StaticGeneralizationOperator(task.search_space)
-        # init the first level
-        for sel in task.search_space:
-            queue.append((float("-inf"), ps.Disjunction([sel])))
+        queue = [(float("-inf"), ps.Disjunction([sel])) for sel in task.search_space]
         task.qf.calculate_constant_statistics(task.data, task.target)
 
+        result = []
         while queue:
             q, candidate_description = heappop(queue)
             q = -q
@@ -255,8 +288,8 @@ class GeneralisingBFS:
 
         result.sort(key=lambda x: x[0], reverse=True)
         for qual, sg in result:
-            print("{} {}".format(qual, sg))
-        print("discarded " + str(self.discarded))
+            print(f"{qual} {sg}")
+        print(f"discarded {str(self.discarded)}")
         return ps.SubgroupDiscoveryResult(result, task)
 
 

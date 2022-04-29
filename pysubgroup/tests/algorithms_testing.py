@@ -10,7 +10,7 @@ class TestAlgorithmsBase(abc.ABC):
         algorithm_result.to_dataframe()
         algorithm_result = algorithm_result.to_descriptions()
         for (q, sg) in algorithm_result:
-            print("   " + str(q) + ":\t" + str(sg))
+            print(f"   {str(q)}" + ":\t" + str(sg))
         # compare length such that zip works correctly
         self.assertEqual(len(algorithm_result), len(result))
         self.assertEqual(len(algorithm_result), len(qualities))
@@ -22,11 +22,11 @@ class TestAlgorithmsBase(abc.ABC):
 
     def runAlgorithm(self, algorithm, name, result, qualities, task):
         print()
-        print("Running " + name)
+        print(f"Running {name}")
         start = timer()
         algorithm_result = algorithm.execute(task)
         end = timer()
-        print("   Runtime for {}: {}".format(name, end - start))
+        print(f"   Runtime for {name}: {end - start}")
 
         if hasattr(self.task.qf, 'calls'):
             print('   Number of call to qf:', self.task.qf.calls)

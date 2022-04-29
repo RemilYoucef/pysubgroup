@@ -42,10 +42,11 @@ class BitSet_Conjunction(ps.Conjunction):
 
     def compute_representation(self):
                 # empty description ==> return a list of all '1's
-        if not self._selectors:
-            return np.full(BitSet_Conjunction.n_instances, True, dtype=bool)
-        # non-empty description
-        return np.all([sel.representation for sel in self._selectors], axis=0)
+        return (
+            np.all([sel.representation for sel in self._selectors], axis=0)
+            if self._selectors
+            else np.full(BitSet_Conjunction.n_instances, True, dtype=bool)
+        )
 
     @property
     def size_sg(self):
@@ -68,10 +69,11 @@ class BitSet_Disjunction(ps.Disjunction):
 
     def compute_representation(self):
                 # empty description ==> return a list of all '1's
-        if not self._selectors:
-            return np.full(BitSet_Conjunction.n_instances, False, dtype=bool)
-        # non-empty description
-        return np.any([sel.representation for sel in self._selectors], axis=0)
+        return (
+            np.any([sel.representation for sel in self._selectors], axis=0)
+            if self._selectors
+            else np.full(BitSet_Conjunction.n_instances, False, dtype=bool)
+        )
 
     @property
     def size_sg(self):
@@ -114,10 +116,11 @@ class Set_Conjunction(ps.Conjunction):
 
     def compute_representation(self):
                 # empty description ==> return a list of all '1's
-        if not self._selectors:
-            return Set_Conjunction.all_set
-        # non-empty description
-        return set.intersection(*[sel.representation for sel in self._selectors])
+        return (
+            set.intersection(*[sel.representation for sel in self._selectors])
+            if self._selectors
+            else Set_Conjunction.all_set
+        )
 
     @property
     def size_sg(self):

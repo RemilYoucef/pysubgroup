@@ -78,7 +78,9 @@ def unique_attributes(result_set, data):
     used_attributes = []
     for (q, sg) in result_set:
         atts = sg.subgroup_description.get_attributes()
-        if atts not in used_attributes or all([ps.is_categorical_attribute(data, x) for x in atts]):
+        if atts not in used_attributes or all(
+            ps.is_categorical_attribute(data, x) for x in atts
+        ):
             result.append((q, sg))
             used_attributes.append(atts)
     return result
@@ -95,19 +97,15 @@ def minimum_statistic_filter(result_set, statistic, minimum, data):
 
 
 def minimum_quality_filter(result_set, minimum):
-    result = []
-    for (q, sg) in result_set:
-        if q >= minimum:
-            result.append((q, sg))
-    return result
+    return [(q, sg) for (q, sg) in result_set if q >= minimum]
 
 
 def maximum_statistic_filter(result_set, statistic, maximum):
-    result = []
-    for (q, sg) in result_set:
-        if sg.statistics[statistic] <= maximum:
-            result.append((q, sg))
-    return result
+    return [
+        (q, sg)
+        for (q, sg) in result_set
+        if sg.statistics[statistic] <= maximum
+    ]
 
 
 def overlap_filter(result_set, data, similarity_level=0.9):
@@ -121,10 +119,10 @@ def overlap_filter(result_set, data, similarity_level=0.9):
 
 
 def overlaps_list(sg, list_of_sgs, data, similarity_level=0.9):
-    for anotherSG in list_of_sgs:
-        if ps.overlap(sg, anotherSG, data) > similarity_level:
-            return True
-    return False
+    return any(
+        ps.overlap(sg, anotherSG, data) > similarity_level
+        for anotherSG in list_of_sgs
+    )
 
 
 class CountCallsInterestingMeasure(BoundedInterestingnessMeasure):
@@ -169,10 +167,9 @@ class GeneralizationAwareQF(AbstractInterestingnessMeasure):
         sg_repr = repr(subgroup)
         if sg_repr in self.cache:
             return GeneralizationAwareQF.ga_tuple(*self.cache[sg_repr])
-        else:
-            (q_sg, q_prev) = self.get_qual_and_previous_qual(subgroup, target, data)
-            self.cache[sg_repr] = (q_sg, q_prev)
-            return GeneralizationAwareQF.ga_tuple(q_sg, q_prev)
+        (q_sg, q_prev) = self.get_qual_and_previous_qual(subgroup, target, data)
+        self.cache[sg_repr] = (q_sg, q_prev)
+        return GeneralizationAwareQF.ga_tuple(q_sg, q_prev)
 
     def get_qual_and_previous_qual(self, subgroup, target, data):
         q_subgroup = self.qf.evaluate(subgroup, target, data)
@@ -219,10 +216,9 @@ class GeneralizationAwareQF_stats(AbstractInterestingnessMeasure):
         sg_repr = repr(subgroup)
         if sg_repr in self.cache:
             return GeneralizationAwareQF_stats.ga_tuple(*self.cache[sg_repr])
-        else:
-            (stats_sg, stats_prev) = self.get_stats_and_previous_stats(subgroup, target, data)
-            self.cache[sg_repr] = (stats_sg, stats_prev)
-            return GeneralizationAwareQF_stats.ga_tuple(stats_sg, stats_prev)
+        (stats_sg, stats_prev) = self.get_stats_and_previous_stats(subgroup, target, data)
+        self.cache[sg_repr] = (stats_sg, stats_prev)
+        return GeneralizationAwareQF_stats.ga_tuple(stats_sg, stats_prev)
 
     def get_stats_and_previous_stats(self, subgroup, target, data):
         stats_subgroup = self.qf.calculate_statistics(subgroup, target, data)

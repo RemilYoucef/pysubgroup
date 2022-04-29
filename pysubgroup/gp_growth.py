@@ -117,31 +117,28 @@ class GpGrowth:
     def recurse(self, cls_nodes, prefix, is_single_path=False):
         if len(cls_nodes) == 0:
             raise RuntimeError
-        results = []
+        results = [(prefix, cls_nodes[-1][0].stats)]
 
-        results.append((prefix, cls_nodes[-1][0].stats))
         if len(prefix) >= self.depth:
             return results
-        
+
         stats_dict = self.get_stats_for_class(cls_nodes)
         if is_single_path:
             root_stats = cls_nodes[-1][0].stats
             del stats_dict[-1]
             all_combinations = ps.powerset(stats_dict.keys(), max_length=self.depth - len(prefix))
-            
-            for comb in all_combinations:
-                results.append((prefix+comb, root_stats))
+
+            results.extend((prefix+comb, root_stats) for comb in all_combinations)
         else:
             for cls, nodes in cls_nodes.items():
-                if cls >= 0:
-                    if self.check_constraints(stats_dict[cls]):
-                        if len(prefix) == (self.depth - 1):
-                            results.append(((*prefix, cls), stats_dict[cls]))
-                        else:
-                            is_single_path_now = len(nodes) == 1
-                            new_tree = self.create_new_tree_from_nodes(nodes)
-                            if len(new_tree) > 0:
-                                results.extend(self.recurse(new_tree, (*prefix, cls), is_single_path_now))
+                if cls >= 0 and self.check_constraints(stats_dict[cls]):
+                    if len(prefix) == (self.depth - 1):
+                        results.append(((*prefix, cls), stats_dict[cls]))
+                    else:
+                        is_single_path_now = len(nodes) == 1
+                        new_tree = self.create_new_tree_from_nodes(nodes)
+                        if len(new_tree) > 0:
+                            results.extend(self.recurse(new_tree, (*prefix, cls), is_single_path_now))
         return results
 
     def get_prefixes_top_down(self, alpha, max_length):
@@ -149,9 +146,13 @@ class GpGrowth:
             return [()]
         if len(alpha) == 1 or max_length == 1:
             return [(alpha[0],)]
-        prefixes = [(alpha[0],)]
-        prefixes.extend([(alpha[0], *suffix) for suffix in self.get_prefixes_top_down(alpha[1:], max_length-1)])
-        return prefixes
+        return [
+            (alpha[0],),
+            *[
+                (alpha[0], *suffix)
+                for suffix in self.get_prefixes_top_down(alpha[1:], max_length - 1)
+            ],
+        ]
 
 
     def recurse_top_down(self, cls_nodes, root, depth_in=0):
@@ -159,15 +160,12 @@ class GpGrowth:
         alpha = []
         curr_depth = depth_in
         while True:
-            if root.cls == -1:
-               pass
-            else:
+            if root.cls != -1:
                 alpha.append(root.cls)
-            if len(root.children) == 1 and curr_depth <= self.depth:
-                curr_depth += 1
-                root = next(iter(root.children.values()))
-            else:
+            if len(root.children) != 1 or curr_depth > self.depth:
                 break
+            curr_depth += 1
+            root = next(iter(root.children.values()))
         prefixes = self.get_prefixes_top_down(alpha, max_length=self.depth - depth_in + 1)
 
         # Bug: If we have a longer path that branches. eg. consider the tree from items A - B - C and A - B - D
@@ -186,31 +184,34 @@ class GpGrowth:
             suffixes = [((), root.stats)]
             stats_dict = self.get_stats_for_class(cls_nodes)
             for cls in cls_nodes:
-                if cls >= 0 and cls not in alpha:
-                    if self.check_constraints(stats_dict[cls]):
-                        # Future: There is also the possibility to compute the stats_dict of the prefix tree
-                        # without creating the prefix tree first
-                        # This might be useful if curr_depth == self.depth - 2
-                        # as we need not recreate the tree
+                if (
+                    cls >= 0
+                    and cls not in alpha
+                    and self.check_constraints(stats_dict[cls])
+                ):
+                    # Future: There is also the possibility to compute the stats_dict of the prefix tree
+                    # without creating the prefix tree first
+                    # This might be useful if curr_depth == self.depth - 2
+                    # as we need not recreate the tree
 
-                        if curr_depth == (self.depth - 1):
-                            suffixes.append(((cls,), stats_dict[cls]))
-                        else:
-                            new_root, nodes = self.get_top_down_tree_for_class(cls_nodes, cls)
-                            if len(nodes) > 0:
-                                new_cls_nodes = self.nodes_to_cls_nodes(nodes)
-                                print("  " * curr_depth, cls, curr_depth, len(new_cls_nodes))
-                                suffixes.extend(self.recurse_top_down(new_cls_nodes, new_root, curr_depth+1))
+                    if curr_depth == (self.depth - 1):
+                        suffixes.append(((cls,), stats_dict[cls]))
+                    else:
+                        new_root, nodes = self.get_top_down_tree_for_class(cls_nodes, cls)
+                        if len(nodes) > 0:
+                            new_cls_nodes = self.nodes_to_cls_nodes(nodes)
+                            print("  " * curr_depth, cls, curr_depth, len(new_cls_nodes))
+                            suffixes.extend(self.recurse_top_down(new_cls_nodes, new_root, curr_depth+1))
 
         return [((*pre, *(suf[0])), suf[1]) for pre, suf in itertools.product(prefixes, suffixes)]
 
     def remove_infrequent_class(self, nodes, cls_nodes, stats_dict):
         # returns cleaned tree
 
-        infrequent_classes = []
-        for cls in cls_nodes:
-            if not self.check_constraints(stats_dict[cls]):
-                infrequent_classes.append(cls)
+        infrequent_classes = [
+            cls for cls in cls_nodes if not self.check_constraints(stats_dict[cls])
+        ]
+
         infrequent_classes = sorted(infrequent_classes, reverse=True)
         for cls in infrequent_classes:
             for node_to_remove in cls_nodes[cls]:
@@ -351,7 +352,7 @@ if __name__ == '__main__':
         the_dict=defaultdict(list)
         prev_key=l[0][0]
         for key, val in l:
-            
+
             if abs(prev_key-key)<10**-11:
                 the_dict[prev_key].append(val)
             else:
@@ -360,8 +361,7 @@ if __name__ == '__main__':
         print(len(the_dict))
         result = []
         for key, vals in the_dict.items():
-            for val in sorted(vals):
-                result.append((key, val))
+            result.extend((key, val) for val in sorted(vals))
         return result
     dfs = better_sorted(dfs)
     gp = better_sorted(gp)

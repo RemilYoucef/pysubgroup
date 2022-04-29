@@ -31,9 +31,7 @@ class SelectorBase(ABC):
         SelectorBase.__refs__.add(self)
 
     def __eq__(self, other):
-        if other is None:
-            return False
-        return repr(self) == repr(other)
+        return False if other is None else repr(self) == repr(other)
 
     def __lt__(self, other):
         return repr(self) < repr(other)
@@ -64,7 +62,7 @@ def get_cover_array_and_size(subgroup, data_len=None, data=None):
         type_char = subgroup.__array_interface__['typestr'][1]
         if type_char == 'b': # boolean indexing is used
             size = np.count_nonzero(cover_arr)
-        elif type_char == 'u' or type_char == 'i': # integer indexing
+        elif type_char in ['u', 'i']: # integer indexing
             size = subgroup.__array_interface__['shape'][0]
         else:
             print(type_char)
@@ -91,7 +89,7 @@ def get_size(subgroup, data_len=None, data=None):
         type_char = subgroup.__array_interface__['typestr'][1]
         if type_char == 'b': # boolean indexing is used
             size = np.count_nonzero(subgroup)
-        elif type_char == 'u' or type_char == 'i': # integer indexing
+        elif type_char in ['u', 'i']: # integer indexing
             size = subgroup.__array_interface__['shape'][0]
         else:
             print(type_char)
@@ -133,10 +131,7 @@ class EqualitySelector(SelectorBase):
             query = attribute_name + ".isnull()"
         else:
             query = str(attribute_name) + "==" + str(attribute_value)
-        if selector_name is not None:
-            string_ = selector_name
-        else:
-            string_ = query
+        string_ = selector_name if selector_name is not None else query
         hash_value = hash(query)
         return (hash_value, query, string_)
 
@@ -173,7 +168,7 @@ class NegatedSelector(SelectorBase):
         return "NOT " + self._selector.__str__(open_brackets, closing_brackets)
 
     def set_descriptions(self, selector):  # pylint: disable=arguments-differ
-        self._query = "(not " + repr(selector) + ")"
+        self._query = f"(not {repr(selector)})"
         self._hash = hash(repr(self))
 
     @property
@@ -247,14 +242,13 @@ class IntervalSelector(SelectorBase):
             lb = formatter.format(lb)
 
         if lower_bound == float("-inf") and upper_bound == float("inf"):
-            repre = attribute_name + "= anything"
+            return attribute_name + "= anything"
         elif lower_bound == float("-inf"):
-            repre = attribute_name + "<" + str(ub)
+            return attribute_name + "<" + str(ub)
         elif upper_bound == float("inf"):
-            repre = attribute_name + ">=" + str(lb)
+            return attribute_name + ">=" + str(lb)
         else:
-            repre = attribute_name + ": [" + str(lb) + ":" + str(ub) + "["
-        return repre
+            return attribute_name + ": [" + str(lb) + ":" + str(ub) + "["
 
     @property
     def selectors(self):
@@ -284,9 +278,11 @@ def create_nominal_selectors(data, ignore=None):
 
 
 def create_nominal_selectors_for_attribute(data, attribute_name, dtypes=None):
-    nominal_selectors = []
-    for val in pd.unique(data[attribute_name]):
-        nominal_selectors.append(EqualitySelector(attribute_name, val))
+    nominal_selectors = [
+        EqualitySelector(attribute_name, val)
+        for val in pd.unique(data[attribute_name])
+    ]
+
     # setting the is_bool flag for selector
     if dtypes is None:
         dtypes = data.dtypes
@@ -315,8 +311,10 @@ def create_numeric_selectors_for_attribute(data, attr_name, nbins=5, intervals_o
         numeric_selectors.append(EqualitySelector(attr_name, np.nan))
 
     if len(uniqueValues) <= nbins:
-        for val in uniqueValues:
-            numeric_selectors.append(EqualitySelector(attr_name, val))
+        numeric_selectors.extend(
+            EqualitySelector(attr_name, val) for val in uniqueValues
+        )
+
     else:
         cutpoints = ps.equal_frequency_discretization(data, attr_name, nbins, weighting_attribute)
         if intervals_only:
@@ -327,18 +325,22 @@ def create_numeric_selectors_for_attribute(data, attr_name, nbins=5, intervals_o
             numeric_selectors.append(IntervalSelector(attr_name, old_cutpoint, float("inf")))
         else:
             for c in cutpoints:
-                numeric_selectors.append(IntervalSelector(attr_name, c, float("inf")))
-                numeric_selectors.append(IntervalSelector(attr_name, float("-inf"), c))
+                numeric_selectors.extend(
+                    (
+                        IntervalSelector(attr_name, c, float("inf")),
+                        IntervalSelector(attr_name, float("-inf"), c),
+                    )
+                )
 
     return numeric_selectors
 
 
 def remove_target_attributes(selectors, target):
-    result = []
-    for sel in selectors:
-        if not sel.get_attribute_name() in target.get_attributes():
-            result.append(sel)
-    return result
+    return [
+        sel
+        for sel in selectors
+        if sel.get_attribute_name() not in target.get_attributes()
+    ]
 
 
 ##############
@@ -378,10 +380,11 @@ class Conjunction(BooleanExpressionBase):
 
     def covers(self, instance):
         # empty description ==> return a list of all '1's
-        if not self._selectors:
-            return np.full(len(instance), True, dtype=bool)
-        # non-empty description
-        return np.all([sel.covers(instance) for sel in self._selectors], axis=0)
+        return (
+            np.all([sel.covers(instance) for sel in self._selectors], axis=0)
+            if self._selectors
+            else np.full(len(instance), True, dtype=bool)
+        )
 
     def __len__(self):
         return len(self._selectors)
@@ -393,11 +396,9 @@ class Conjunction(BooleanExpressionBase):
         return "".join((open_brackets, and_term.join(attrs), closing_brackets))
 
     def __repr__(self):
-        if hasattr(self, "_repr"):
-            return self._repr
-        else:
+        if not hasattr(self, "_repr"):
             self._repr = self._compute_repr()
-            return self._repr
+        return self._repr
 
     def __eq__(self, other):
         return repr(self) == repr(other)
@@ -406,11 +407,9 @@ class Conjunction(BooleanExpressionBase):
         return repr(self) < repr(other)
 
     def __hash__(self):
-        if hasattr(self, "_hash"):
-            return self._hash
-        else:
+        if not hasattr(self, "_hash"):
             self._hash = self._compute_hash()
-            return self._hash
+        return self._hash
 
     def _compute_representations(self):
         self._repr = self._compute_repr()
@@ -478,10 +477,11 @@ class Disjunction(BooleanExpressionBase):
 
     def covers(self, instance):
         # empty description ==> return a list of all '1's
-        if not self._selectors:
-            return np.full(len(instance), False, dtype=bool)
-        # non-empty description
-        return np.any([sel.covers(instance) for sel in self._selectors], axis=0)
+        return (
+            np.any([sel.covers(instance) for sel in self._selectors], axis=0)
+            if self._selectors
+            else np.full(len(instance), False, dtype=bool)
+        )
 
     def __len__(self):
         return len(self._selectors)

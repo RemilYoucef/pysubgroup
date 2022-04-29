@@ -21,7 +21,7 @@ class NumericTarget:
         self.target_variable = target_variable
 
     def __repr__(self):
-        return "T: " + str(self.target_variable)
+        return f"T: {str(self.target_variable)}"
 
     def __eq__(self, other):
         return self.__dict__ == other.__dict__
@@ -44,7 +44,7 @@ class NumericTarget:
 
     def calculate_statistics(self, subgroup, data, cached_statistics=None):
         if cached_statistics is None or not isinstance(cached_statistics, dict):
-            statistics = dict()
+            statistics = {}
         elif all(k in cached_statistics for k in NumericTarget.statistic_types):
             return cached_statistics
         else:
@@ -190,25 +190,20 @@ class StandardQFNumeric(ps.BoundedInterestingnessMeasure):
                     return
                 @njit
                 def estimate_numba(values_sg, a, mean_dataset):
-                    n = 1
                     sum_values = 0
                     max_value = -10 ** 10
-                    for val in values_sg:
+                    for n, val in enumerate(values_sg, start=1):
                         sum_values += val
                         mean_sg = sum_values / n
                         quality = n ** a * (mean_sg - mean_dataset)
                         if quality > max_value:
                             max_value = quality
-                        n += 1
                     return max_value
                 self._get_estimate = estimate_numba
                 self.numba_in_place = True
 
         def get_estimate(self, subgroup, sg_size, sg_mean, cover_arr, target_values_sg):  # pylint: disable=unused-argument
-            if self.numba_in_place:
-                return self._get_estimate(target_values_sg, self.qf.a, self.qf.dataset_statistics.mean)
-            else:
-                return self._get_estimate(target_values_sg, self.qf.a, self.qf.dataset_statistics.mean)
+            return self._get_estimate(target_values_sg, self.qf.a, self.qf.dataset_statistics.mean)
 
         def get_estimate_numpy(self, values_sg, _, mean_dataset):
             target_values_cs = np.cumsum(values_sg)
@@ -216,8 +211,7 @@ class StandardQFNumeric(ps.BoundedInterestingnessMeasure):
             mean_values = target_values_cs / sizes
             stats = StandardQFNumeric.tpl(sizes, mean_values, mean_dataset)
             qualities = self.qf.evaluate(None, None, None, stats)
-            optimistic_estimate = np.max(qualities)
-            return optimistic_estimate
+            return np.max(qualities)
 
 
 
@@ -340,25 +334,20 @@ class StandardQFNumericMedian(ps.BoundedInterestingnessMeasure):
                     return
                 @njit
                 def estimate_numba(values_sg, a, mean_dataset):
-                    n = 1
                     sum_values = 0
                     max_value = -10 ** 10
-                    for val in values_sg:
+                    for n, val in enumerate(values_sg, start=1):
                         sum_values += val
                         mean_sg = sum_values / n
                         quality = n ** a * (mean_sg - mean_dataset)
                         if quality > max_value:
                             max_value = quality
-                        n += 1
                     return max_value
                 self._get_estimate = estimate_numba
                 self.numba_in_place = True
 
         def get_estimate(self, subgroup, sg_size, sg_mean, cover_arr, target_values_sg):  # pylint: disable=unused-argument
-            if self.numba_in_place:
-                return self._get_estimate(target_values_sg, self.qf.a, self.qf.dataset_statistics.mean)
-            else:
-                return self._get_estimate(target_values_sg, self.qf.a, self.qf.dataset_statistics.mean)
+            return self._get_estimate(target_values_sg, self.qf.a, self.qf.dataset_statistics.mean)
 
         def get_estimate_numpy(self, values_sg, _, mean_dataset):
             target_values_cs = np.cumsum(values_sg)
@@ -366,8 +355,7 @@ class StandardQFNumericMedian(ps.BoundedInterestingnessMeasure):
             mean_values = target_values_cs / sizes
             stats = StandardQFNumericMedian.tpl(sizes, mean_values, mean_dataset)
             qualities = self.qf.evaluate(None, None, None, stats)
-            optimistic_estimate = np.max(qualities)
-            return optimistic_estimate
+            return np.max(qualities)
 
 
 class StandardQFNumericTscore(ps.BoundedInterestingnessMeasure):
@@ -495,25 +483,20 @@ class StandardQFNumericTscore(ps.BoundedInterestingnessMeasure):
                     return
                 @njit
                 def estimate_numba(values_sg, a, mean_dataset):
-                    n = 1
                     sum_values = 0
                     max_value = -10 ** 10
-                    for val in values_sg:
+                    for n, val in enumerate(values_sg, start=1):
                         sum_values += val
                         mean_sg = sum_values / n
                         quality = n ** a * (mean_sg - mean_dataset)
                         if quality > max_value:
                             max_value = quality
-                        n += 1
                     return max_value
                 self._get_estimate = estimate_numba
                 self.numba_in_place = True
 
         def get_estimate(self, subgroup, sg_size, sg_mean, cover_arr, target_values_sg):  # pylint: disable=unused-argument
-            if self.numba_in_place:
-                return self._get_estimate(target_values_sg, self.qf.a, self.qf.dataset_statistics.mean)
-            else:
-                return self._get_estimate(target_values_sg, self.qf.a, self.qf.dataset_statistics.mean)
+            return self._get_estimate(target_values_sg, self.qf.a, self.qf.dataset_statistics.mean)
 
         def get_estimate_numpy(self, values_sg, _, mean_dataset):
             target_values_cs = np.cumsum(values_sg)
@@ -521,8 +504,7 @@ class StandardQFNumericTscore(ps.BoundedInterestingnessMeasure):
             mean_values = target_values_cs / sizes
             stats = StandardQFNumericTscore.tpl(sizes, mean_values, mean_dataset)
             qualities = self.qf.evaluate(None, None, None, stats)
-            optimistic_estimate = np.max(qualities)
-            return optimistic_estimate
+            return np.max(qualities)
 
 
 # TODO Update to new format

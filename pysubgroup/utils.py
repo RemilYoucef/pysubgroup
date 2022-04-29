@@ -27,10 +27,7 @@ def add_if_required(result, sg, quality, task, check_for_duplicates=False, stati
 
 
 def minimum_required_quality(result, task):
-    if len(result) < task.result_set_size:
-        return task.min_quality
-    else:
-        return result[0][0]
+    return task.min_quality if len(result) < task.result_set_size else result[0][0]
 
 
 # Returns the cutpoints for discretization
@@ -43,9 +40,7 @@ def equal_frequency_discretization(data, attribute_name, nbins=5, weighting_attr
         number_instances = len(sorted_data)
         for i in range(1, nbins):
             position = i * number_instances // nbins
-            while True:
-                if position >= number_instances:
-                    break
+            while position < number_instances:
                 val = sorted_data[position]
                 if val not in cutpoints:
                     break
@@ -64,13 +59,15 @@ def equal_frequency_discretization(data, attribute_name, nbins=5, weighting_attr
         sum_of_weights = 0
         for row in cleaned_data:
             sum_of_weights += row[weighting_attribute]
-            if sum_of_weights > bin_size:
-                if not row[attribute_name] in cutpoints:
-                    cutpoints.append(row[attribute_name])
-                    remaining_weights = remaining_weights - sum_of_weights
-                    if remaining_weights < 1.5 * (bin_size):
-                        break
-                    sum_of_weights = 0
+            if (
+                sum_of_weights > bin_size
+                and row[attribute_name] not in cutpoints
+            ):
+                cutpoints.append(row[attribute_name])
+                remaining_weights = remaining_weights - sum_of_weights
+                if remaining_weights < 1.5 * (bin_size):
+                    break
+                sum_of_weights = 0
     return cutpoints
 
 
@@ -140,8 +137,7 @@ def powerset(iterable, max_length=None):
     s = list(iterable)
     if max_length is None:
         max_length = len(s)
-    if max_length < len(s):
-        max_length = len(s)
+    max_length = max(max_length, len(s))
     return itertools.chain.from_iterable(itertools.combinations(s, r) for r in range(max_length))
 
 
@@ -150,18 +146,14 @@ def overlap(sg, another_sg, data):
     cover_another_sg = another_sg.covers(data)
     union = np.logical_or(cover_sg, cover_another_sg)
     intercept = np.logical_and(cover_sg, cover_another_sg)
-    sim = np.sum(intercept) / np.sum(union)
-    return sim
+    return np.sum(intercept) / np.sum(union)
 
 
 #####
 # bitset operations
 #####
 def to_bits(list_of_ints):
-    v = 0
-    for x in list_of_ints:
-        v += 1 << x
-    return v
+    return sum(1 << x for x in list_of_ints)
 
 
 def count_bits(bitset_as_int):
@@ -213,16 +205,14 @@ class SubgroupDiscoveryResult:
         table = []
         if print_header:
             row = ["quality", "subgroup"]
-            for stat in statistics_to_show:
-                row.append(stat)
+            row.extend(iter(statistics_to_show))
             table.append(row)
         for (q, sg, stats) in self.results:
             stats = self.task.target.calculate_statistics(sg, self.task.data, stats)
             row = [str(q), str(sg)]
             if include_target:
                 row.append(str(self.task.target))
-            for stat in statistics_to_show:
-                row.append(str(stats[stat]))
+            row.extend(str(stats[stat]) for stat in statistics_to_show)
             table.append(row)
         return table
 
